@@ -35,6 +35,14 @@ data is requested, it stops being free. (See the note in the IEX section below.)
 
 
 ## Install
+```bash
+wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+tar -xzf ta-lib-0.4.0-src.tar.gz
+cd ta-lib
+./configure --prefix=/usr
+make
+sudo make install
+```
 
 `pipeline-live` is a PyPI module and you can install it using `pip` command.
 

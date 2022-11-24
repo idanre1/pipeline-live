@@ -14,9 +14,9 @@ with open('README.md') as readme_file:
     README = readme_file.read()
 
 setup(
-    name='pipeline-live',
+    name='pipeline-research',
     version=version,
-    description='Zipline Pipeline extension for live trade',
+    description='Zipline Pipeline extension for research notebooks',
     long_description=README,
     long_description_content_type='text/markdown',
     author='Alpaca',

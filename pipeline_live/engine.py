@@ -20,7 +20,7 @@ from zipline.utils.numpy_utils import (
 from zipline.utils.pandas_utils import explode
 
 
-class LivePipelineEngine(object):
+class ResearchPipelineEngine(object):
 
     def __init__(self,
                  list_symbols,
@@ -38,22 +38,13 @@ class LivePipelineEngine(object):
             populate_initial_workspace or default_populate_initial_workspace
         )
 
-    def run_pipeline(self, pipeline):
-        now = pd.Timestamp.now(tz=self._calendar.tz)
-        today = pd.Timestamp(
-            year=now.year, month=now.month, day=now.day,
-            tz='utc')
-
-        end_date = self._calendar[self._calendar.get_loc(
-            today, method='ffill'
-        )]
-        start_date = end_date
+    def run_pipeline(self, pipeline, start_date, end_date):
         screen_name = uuid4().hex
         graph = pipeline.to_execution_plan(screen_name,
                                            self._root_mask_term,
                                            self._calendar,
-                                           start_date,
-                                           end_date,
+                                           pd.Timestamp(start_date),
+                                           pd.Timestamp(end_date),
                                            )
         extra_rows = graph.extra_rows[self._root_mask_term]
         root_mask = self._compute_root_mask(start_date, end_date, extra_rows)
