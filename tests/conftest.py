@@ -2,8 +2,8 @@ import pytest
 import tempfile
 from unittest.mock import patch
 
-from pipeline_live.data.sources import iex as sources_iex
-from pipeline_live.data.sources import alpaca as sources_alpaca
+from pipeline_research.data.sources import iex as sources_iex
+from pipeline_research.data.sources import alpaca as sources_alpaca
 
 
 @pytest.fixture

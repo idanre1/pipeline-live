@@ -2,7 +2,7 @@ import logging
 
 import numpy as np
 
-from pipeline_live.data.sources import iex
+from pipeline_research.data.sources import iex
 from zipline.pipeline.loaders.base import PipelineLoader
 from zipline.utils.numpy_utils import object_dtype
 

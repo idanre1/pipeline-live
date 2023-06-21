@@ -1,7 +1,7 @@
 from uuid import uuid4
 from numpy import array
 import pandas as pd
-from pandas import DataFrame
+from pandas import DataFrame, MultiIndex
 from six import (
     iteritems,
 )
@@ -12,7 +12,8 @@ from zipline.lib.adjusted_array import ensure_adjusted_array, ensure_ndarray
 from zipline.errors import NoFurtherDataError
 from zipline.pipeline.engine import default_populate_initial_workspace
 from zipline.pipeline.term import AssetExists, InputDates, LoadableTerm
-from zipline.utils.calendars import get_calendar
+from zipline.pipeline.domain import US_EQUITIES
+from zipline.utils.calendar_utils import get_calendar
 from zipline.utils.numpy_utils import (
     as_column,
     repeat_first_axis,
@@ -25,7 +26,9 @@ class ResearchPipelineEngine(object):
     def __init__(self,
                  list_symbols,
                  calendar=None,
-                 populate_initial_workspace=None):
+                 populate_initial_workspace=None,
+                 default_hooks=None,
+                 ):
         self._list_symbols = list_symbols
         if calendar is None:
             calendar = get_calendar('NYSE').all_sessions
@@ -37,14 +40,21 @@ class ResearchPipelineEngine(object):
         self._populate_initial_workspace = (
             populate_initial_workspace or default_populate_initial_workspace
         )
+        self._default_domain = US_EQUITIES
 
+        if default_hooks is None:
+            self._default_hooks = []
+        else:
+            self._default_hooks = list(default_hooks)
+    
     def run_pipeline(self, pipeline, start_date, end_date):
-        screen_name = uuid4().hex
-        graph = pipeline.to_execution_plan(screen_name,
+        domain = US_EQUITIES
+        start_date = pd.Timestamp(start_date, tz='UTC')
+        end_date = pd.Timestamp(end_date, tz='UTC')
+        graph = pipeline.to_execution_plan(domain,
                                            self._root_mask_term,
-                                           self._calendar,
-                                           pd.Timestamp(start_date),
-                                           pd.Timestamp(end_date),
+                                           start_date,
+                                           end_date,
                                            )
         extra_rows = graph.extra_rows[self._root_mask_term]
         root_mask = self._compute_root_mask(start_date, end_date, extra_rows)
@@ -71,7 +81,7 @@ class ResearchPipelineEngine(object):
         return self._to_narrow(
             graph.outputs,
             results,
-            results.pop(screen_name),
+            results.pop(graph.screen_name),
             dates[extra_rows:],
             assets,
         )
@@ -114,12 +124,13 @@ class ResearchPipelineEngine(object):
         # Build lifetimes matrix reaching back to `extra_rows` days before
         # `start_date.`
         symbols = self._list_symbols()
+        symbols = [s for s in symbols if isinstance(s, str)]
         dates = calendar[start_idx - extra_rows:end_idx]
         symbols = sorted(symbols)
         lifetimes = pd.DataFrame(True, index=dates, columns=symbols)
 
-        assert lifetimes.index[extra_rows] == start_date
-        assert lifetimes.index[-1] == end_date
+        assert lifetimes.index[extra_rows] >= start_date
+        assert lifetimes.index[-1] <= end_date
         if not lifetimes.columns.unique:
             columns = lifetimes.columns
             duplicated = columns[columns.duplicated()].unique()
@@ -208,7 +219,7 @@ class ResearchPipelineEngine(object):
 
         refcounts = graph.initial_refcounts(workspace)
 
-        for term in graph.execution_order(refcounts):
+        for term in graph.execution_order(workspace, refcounts):
             # `term` may have been supplied in `initial_workspace`, and in the
             # future we may pre-compute loadable terms coming from the same
             # dataset.  In either case, we will already have an entry for this
@@ -290,7 +301,7 @@ class ResearchPipelineEngine(object):
         If mask[date, asset] is True, then result.loc[(date, asset), colname]
         will contain the value of data[colname][date, asset].
         """
-        assert len(dates) == 1
+        # assert len(dates) == 1
         if not mask.any():
             # Manually handle the empty DataFrame case. This is a workaround
             # to pandas failing to tz_localize an empty dataframe with a
@@ -298,15 +309,15 @@ class ResearchPipelineEngine(object):
             # mask to each array.
             #
             # Slicing `dates` here to preserve pandas metadata.
-            # empty_dates = dates[:0]
+            empty_dates = dates[:0]
             empty_assets = array([], dtype=object)
             return DataFrame(
                 data={
                     name: array([], dtype=arr.dtype)
                     for name, arr in iteritems(data)
                 },
-                index=pd.Index(empty_assets),
-                # index=MultiIndex.from_arrays([empty_dates, empty_assets]),
+                # index=pd.Index(empty_assets),
+                index=MultiIndex.from_arrays([empty_dates, empty_assets]),
             )
 
         # resolved_assets = array(self._finder.retrieve_all(assets))
@@ -323,12 +334,11 @@ class ResearchPipelineEngine(object):
             # LabelArrays into categoricals.
             final_columns[name] = terms[name].postprocess(data[name][mask])
 
-        return DataFrame(
-            data=final_columns,
-            index=pd.Index(assets_kept),
-            # index=MultiIndex.from_arrays([dates_kept, assets_kept]),
-        )
+        resolved_assets = array(self._finder.retrieve_all(assets))
+        index = _pipeline_output_index(dates, resolved_assets, mask)
 
+        return DataFrame(data=final_columns, index=index)
+    
     def _validate_compute_chunk_params(
             self, dates, symbols, initial_workspace):
         """
@@ -358,3 +368,33 @@ class ResearchPipelineEngine(object):
                     implied=implied_shape,
                 )
             )
+def _pipeline_output_index(dates, assets, mask):
+    """
+    Create a MultiIndex for a pipeline output.
+
+    Parameters
+    ----------
+    dates : pd.DatetimeIndex
+        Row labels for ``mask``.
+    assets : pd.Index
+        Column labels for ``mask``.
+    mask : np.ndarray[bool]
+        Mask array indicating date/asset pairs that should be included in
+        output index.
+
+    Returns
+    -------
+    index : pd.MultiIndex
+        MultiIndex  containing (date,  asset) pairs  corresponding to  ``True``
+        values in ``mask``.
+    """
+    date_labels = repeat_last_axis(arange(len(dates)), len(assets))[mask]
+    asset_labels = repeat_first_axis(arange(len(assets)), len(dates))[mask]
+    return MultiIndex(
+        levels=[dates, assets],
+        #labels=[date_labels, asset_labels],
+        codes=[date_labels, asset_labels],
+        # TODO: We should probably add names for these.
+        names=[None, None],
+        verify_integrity=False,
+    )

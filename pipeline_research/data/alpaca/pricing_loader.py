@@ -7,7 +7,7 @@ from zipline.pipeline.loaders.base import PipelineLoader
 from zipline.utils.calendars import get_calendar
 from zipline.errors import NoFurtherDataError
 
-from pipeline_live.data.sources import alpaca
+from pipeline_research.data.sources import alpaca
 
 
 log = logbook.Logger(__name__)

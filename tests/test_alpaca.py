@@ -3,7 +3,7 @@ import numpy as np
 
 from .datamock import mock_tradeapi
 
-from pipeline_live.data.alpaca.pricing import USEquityPricing
+from pipeline_research.data.alpaca.pricing import USEquityPricing
 
 def test_pricing_loader(refdata, alpaca_tradeapi, data_path):
     mock_tradeapi.list_assets(alpaca_tradeapi)

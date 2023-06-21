@@ -1,10 +1,10 @@
 import pytest
 
-from pipeline_live.engine import LivePipelineEngine
-from pipeline_live.data.iex.pricing import USEquityPricing
-from pipeline_live.data.iex.classifiers import Sector
+from pipeline_research.engine import ResearchPipelineEngine
+from pipeline_research.data.iex.pricing import USEquityPricing
+from pipeline_research.data.iex.classifiers import Sector
 
-from pipeline_live.data.alpaca.factors import AverageDollarVolume
+from pipeline_research.data.alpaca.factors import AverageDollarVolume
 from zipline.pipeline import Pipeline
 
 
@@ -22,7 +22,7 @@ def test_engine(refdata, stocks, alpaca_tradeapi):
     mock_iex.get_chart(stocks)
     mock_tradeapi.list_assets(alpaca_tradeapi)
 
-    eng = LivePipelineEngine(list_symbols)
+    eng = ResearchPipelineEngine(list_symbols)
     ADV = AverageDollarVolume(window_length=20,)
     top5 = ADV.top(5, groupby=Sector())
     pipe = Pipeline({
