@@ -9,4 +9,4 @@ pipe = Pipeline({
 })#, screen=top5)
 
 df = eng.run_pipeline(pipe, start_date='2019-01-02', end_date='2020-01-01')
-print(df.head())
+print(df)

@@ -1,5 +1,6 @@
 from uuid import uuid4
 from numpy import array
+import numpy as np
 import pandas as pd
 from pandas import DataFrame, MultiIndex
 from six import (
@@ -13,10 +14,12 @@ from zipline.errors import NoFurtherDataError
 from zipline.pipeline.engine import default_populate_initial_workspace
 from zipline.pipeline.term import AssetExists, InputDates, LoadableTerm
 from zipline.pipeline.domain import US_EQUITIES
+from zipline.pipeline.graph import maybe_specialize
 from zipline.utils.calendar_utils import get_calendar
 from zipline.utils.numpy_utils import (
     as_column,
     repeat_first_axis,
+    repeat_last_axis,
 )
 from zipline.utils.pandas_utils import explode
 
@@ -47,17 +50,26 @@ class ResearchPipelineEngine(object):
         else:
             self._default_hooks = list(default_hooks)
     
+    
     def run_pipeline(self, pipeline, start_date, end_date):
-        domain = US_EQUITIES
         start_date = pd.Timestamp(start_date, tz='UTC')
         end_date = pd.Timestamp(end_date, tz='UTC')
+        if end_date < start_date:
+            raise ValueError(
+                "start_date must be before or equal to end_date \n"
+                f"start_date={start_date}, end_date={end_date}"
+            )
+
+        domain = US_EQUITIES
+        # domain = self.resolve_domain(pipeline)
+
         graph = pipeline.to_execution_plan(domain,
                                            self._root_mask_term,
                                            start_date,
                                            end_date,
                                            )
         extra_rows = graph.extra_rows[self._root_mask_term]
-        root_mask = self._compute_root_mask(start_date, end_date, extra_rows)
+        root_mask = self._compute_root_mask(domain, start_date, end_date, extra_rows)
         dates, assets, root_mask_values = explode(root_mask)
 
         initial_workspace = self._populate_initial_workspace(
@@ -71,11 +83,16 @@ class ResearchPipelineEngine(object):
             assets,
         )
 
+        refcounts = graph.initial_refcounts(initial_workspace)
+        execution_order = graph.execution_order(initial_workspace, refcounts)
+
         results = self.compute_chunk(
             graph,
             dates,
             assets,
             initial_workspace,
+            refcounts,
+            execution_order
         )
 
         return self._to_narrow(
@@ -86,7 +103,7 @@ class ResearchPipelineEngine(object):
             assets,
         )
 
-    def _compute_root_mask(self, start_date, end_date, extra_rows):
+    def _compute_root_mask(self, domain, start_date, end_date, extra_rows):
         """
         Compute a lifetimes matrix from our AssetFinder, then drop columns that
         didn't exist at all during the query dates.
@@ -111,7 +128,21 @@ class ResearchPipelineEngine(object):
             that existed for at least one day between `start_date` and
             `end_date`.
         """
+        # calendar = domain.sessions()
         calendar = self._calendar
+
+        # if start_date not in calendar:
+        #     raise ValueError(
+        #         f"Pipeline start date ({start_date}) is not a trading session for "
+        #         f"domain {domain}."
+        #     )
+
+        # elif end_date not in calendar:
+        #     raise ValueError(
+        #         f"Pipeline end date {end_date} is not a trading session for "
+        #         f"domain {domain}."
+        #     )
+        
         start_idx, end_idx = calendar.slice_locs(start_date, end_date)
         if start_idx < extra_rows:
             raise NoFurtherDataError.from_lookback_window(
@@ -131,6 +162,8 @@ class ResearchPipelineEngine(object):
 
         assert lifetimes.index[extra_rows] >= start_date
         assert lifetimes.index[-1] <= end_date
+
+
         if not lifetimes.columns.unique:
             columns = lifetimes.columns
             duplicated = columns[columns.duplicated()].unique()
@@ -145,7 +178,7 @@ class ResearchPipelineEngine(object):
         return ret
 
     @staticmethod
-    def _inputs_for_term(term, workspace, graph):
+    def _inputs_for_term(term, workspace, graph, domain, refcounts):
         """
         Compute inputs for the given term.
 
@@ -155,10 +188,15 @@ class ResearchPipelineEngine(object):
         """
         offsets = graph.offset
         out = []
+        # We need to specialize here because we don't change ComputableTerm
+        # after resolving domains, so they can still contain generic terms as
+        # inputs.
+        specialized = [maybe_specialize(t, domain) for t in term.inputs]
+        
         if term.windowed:
             # If term is windowed, then all input data should be instances of
             # AdjustedArray.
-            for input_ in term.inputs:
+            for input_ in specialized:
                 adjusted_array = ensure_adjusted_array(
                     workspace[input_], input_.missing_value,
                 )
@@ -166,22 +204,27 @@ class ResearchPipelineEngine(object):
                     adjusted_array.traverse(
                         window_length=term.window_length,
                         offset=offsets[term, input_],
+                        # If the refcount for the input is > 1, we will need
+                        # to traverse this array again so we must copy.
+                        # If the refcount for the input == 0, this is the last
+                        # traversal that will happen so we can invalidate
+                        # the AdjustedArray and mutate the data in place.
+                        copy=refcounts[input_] > 1,
                     )
                 )
         else:
             # If term is not windowed, input_data may be an AdjustedArray or
             # np.ndarray.  Coerce the former to the latter.
-            for input_ in term.inputs:
+            for input_ in specialized:
                 input_data = ensure_ndarray(workspace[input_])
                 offset = offsets[term, input_]
-                # OPTIMIZATION: Don't make a copy by doing input_data[0:] if
-                # offset is zero.
-                if offset:
-                    input_data = input_data[offset:]
+                input_data = input_data[offset:]
+                if refcounts[input_] > 1:
+                    input_data = input_data.copy()
                 out.append(input_data)
         return out
 
-    def compute_chunk(self, graph, dates, symbols, initial_workspace):
+    def compute_chunk(self, graph, dates, symbols, initial_workspace, refcounts, execution_order):
         """
         Compute the Pipeline terms in the graph for the requested start and end
         dates.
@@ -209,6 +252,7 @@ class ResearchPipelineEngine(object):
 
         # Copy the supplied initial workspace so we don't mutate it in place.
         workspace = initial_workspace.copy()
+        domain = graph.domain
 
         # If loadable terms share the same loader and extra_rows, load them all
         # together.
@@ -219,7 +263,7 @@ class ResearchPipelineEngine(object):
 
         refcounts = graph.initial_refcounts(workspace)
 
-        for term in graph.execution_order(workspace, refcounts):
+        for term in execution_order:
             # `term` may have been supplied in `initial_workspace`, and in the
             # future we may pre-compute loadable terms coming from the same
             # dataset.  In either case, we will already have an entry for this
@@ -245,10 +289,19 @@ class ResearchPipelineEngine(object):
                 loaded = loader.load_adjusted_array(
                     to_load, mask_dates, symbols, mask,
                 )
+                assert set(loaded) == set(to_load), (
+                    "loader did not return an AdjustedArray for each column\n"
+                    "expected: %r\n"
+                    "got:      %r"
+                    % (
+                        sorted(to_load, key=repr),
+                        sorted(loaded, key=repr),
+                    )
+                )
                 workspace.update(loaded)
             else:
                 workspace[term] = term._compute(
-                    self._inputs_for_term(term, workspace, graph),
+                    self._inputs_for_term(term, workspace, graph, domain, refcounts),
                     mask_dates,
                     symbols,
                     mask,
@@ -301,7 +354,6 @@ class ResearchPipelineEngine(object):
         If mask[date, asset] is True, then result.loc[(date, asset), colname]
         will contain the value of data[colname][date, asset].
         """
-        # assert len(dates) == 1
         if not mask.any():
             # Manually handle the empty DataFrame case. This is a workaround
             # to pandas failing to tz_localize an empty dataframe with a
@@ -314,16 +366,12 @@ class ResearchPipelineEngine(object):
             return DataFrame(
                 data={
                     name: array([], dtype=arr.dtype)
-                    for name, arr in iteritems(data)
+                    for name, arr in data.items()
                 },
                 # index=pd.Index(empty_assets),
                 index=MultiIndex.from_arrays([empty_dates, empty_assets]),
             )
 
-        # resolved_assets = array(self._finder.retrieve_all(assets))
-        # dates_kept = repeat_last_axis(dates.values, len(symbols))[mask]
-        # assets_kept = repeat_first_axis(resolved_assets, len(dates))[mask]
-        assets_kept = repeat_first_axis(symbols, len(dates))[mask]
 
         final_columns = {}
         for name in data:
@@ -334,7 +382,9 @@ class ResearchPipelineEngine(object):
             # LabelArrays into categoricals.
             final_columns[name] = terms[name].postprocess(data[name][mask])
 
-        resolved_assets = array(self._finder.retrieve_all(assets))
+        # resolved_assets = array(self._finder.retrieve_all(symbols))
+        # resolved_assets = repeat_first_axis(symbols.to_numpy(), len(dates))[mask]
+        resolved_assets = symbols.to_numpy()
         index = _pipeline_output_index(dates, resolved_assets, mask)
 
         return DataFrame(data=final_columns, index=index)
@@ -388,8 +438,8 @@ def _pipeline_output_index(dates, assets, mask):
         MultiIndex  containing (date,  asset) pairs  corresponding to  ``True``
         values in ``mask``.
     """
-    date_labels = repeat_last_axis(arange(len(dates)), len(assets))[mask]
-    asset_labels = repeat_first_axis(arange(len(assets)), len(dates))[mask]
+    date_labels = repeat_last_axis(np.arange(len(dates)), len(assets))[mask]
+    asset_labels = repeat_first_axis(np.arange(len(assets)), len(dates))[mask]
     return MultiIndex(
         levels=[dates, assets],
         #labels=[date_labels, asset_labels],
