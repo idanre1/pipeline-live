@@ -14,6 +14,7 @@ def test_pricing_loader(refdata, alpaca_tradeapi, data_path):
     dates = [pd.Timestamp('2018-08-22', tz='UTC')]
     symbols = ['AA']
     mask = np.zeros((1, 1), dtype='bool')
-    out = loader.load_adjusted_array(columns, dates, symbols, mask)
+    domain = None
+    out = loader.load_adjusted_array(domain, columns, dates, symbols, mask)
 
     assert out[USEquityPricing.close]._data.shape == (1, 1)

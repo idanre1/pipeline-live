@@ -471,7 +471,7 @@ class ResearchPipelineEngine(PipelineEngine):
                 self._ensure_can_load(loader, to_load)
                 with hooks.loading_terms(to_load):
                     loaded = loader.load_adjusted_array(
-                        to_load, mask_dates, symbols, mask,
+                        domain, to_load, mask_dates, symbols, mask,
                 )
                 assert set(loaded) == set(to_load), (
                     'loader did not return an AdjustedArray for each column\n'

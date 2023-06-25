@@ -23,7 +23,7 @@ class USEquityPricingLoader(PipelineLoader):
 
         self._all_sessions = cal.all_sessions
 
-    def load_adjusted_array(self, columns, dates, symbols, mask):
+    def load_adjusted_array(self, domain, columns, dates, symbols, mask):
         # load_adjusted_array is called with dates on which the user's algo
         # will be shown data, which means we need to return the data that would
         # be known at the start of each date.  We assume that the latest data

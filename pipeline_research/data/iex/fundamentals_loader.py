@@ -19,7 +19,7 @@ class IEXEventLoader(PipelineLoader):
         return out
 
 
-    def load_adjusted_array(self, columns, dates, symbols, mask):
+    def load_adjusted_array(self, domain, columns, dates, symbols, mask):
         symbol_dict = self._load()
         out = {}
         for c in columns:
@@ -35,7 +35,7 @@ class IEXEventLoader(PipelineLoader):
 
 class IEXBaseLoader(PipelineLoader):
 
-    def load_adjusted_array(self, columns, dates, symbols, mask):
+    def load_adjusted_array(self, domain, columns, dates, symbols, mask):
         symbol_dict = self._load()
         out = {}
         for c in columns:

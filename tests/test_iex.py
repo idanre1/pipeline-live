@@ -15,7 +15,8 @@ def test_IEXKeyStats(refdata, stocks, data_path):
     marketcap = IEXKeyStats.marketcap
     loader = marketcap.dataset.get_loader()
     date = pd.Timestamp('2018-08-20', tz='utc')
-    out = loader.load_adjusted_array([marketcap], [date], ['AA'], [])
+    domain = None
+    out = loader.load_adjusted_array(domain, [marketcap], [date], ['AA'], [])
 
     assert out[marketcap][0][0] != 0.0
 
@@ -29,6 +30,7 @@ def test_pricing_loader(refdata, stocks, data_path):
     dates = [pd.Timestamp('2018-08-22', tz='UTC')]
     symbols = ['AA']
     mask = np.zeros((1, 1), dtype='bool')
-    out = loader.load_adjusted_array(columns, dates, symbols, mask)
+    domain = None
+    out = loader.load_adjusted_array(domain, columns, dates, symbols, mask)
 
     assert out[USEquityPricing.close]._data.shape == (1, 1)
