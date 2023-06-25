@@ -1,32 +1,20 @@
-# ⚠️ This software is very outdated and is not recommended for use in new setups ⚠️
+# Research pipeline
+This tool leverages [zipline-reloaded](https://github.com/stefan-jansen/zipline-reloaded) Pipeline 
+and some alternations to SimplePipelineEngine for leveraging the pipeline method as suggested by Quantopian  
+Pros:
+- No ingesiton is needed
+- Support offline databases (e.g. parquest files)
+- Pipeline output can be fed into other, more complex backtesting systems than zipline.
 
-We will keep this project up and with the documentation for the parts that remain
-for those users who are still using this, but we suggest migrating to another tool
-until we perform a major refactoring of this project to bring it up to speed. If this
-is something you'd like to see please reach out to us to let us know!
-
-The docs below still talk about zipline and Quantopian however Quantopian has since
-gone out of business and the below hasn't yet been updated to reflect this.
-
-If you're looking for another modern alternative to zipline, we recommend checking
-out [zipline-reloaded](https://github.com/stefan-jansen/zipline-reloaded) in the meantime
-while we review committing to a major refactor of this project.
-
-## Zipline Pipeline Extension for Live Trading
-`pipeline-live` is an extension for zipline pipeline independently usable
-for live trading, outside of zipline. While zipline is a great backtesting
+## Zipline Pipeline Extension for Research
+`pipeline-research` is an extension for zipline pipeline independently usable
+for research, outside of zipline. While zipline is a great backtesting
 library, the default Pipeline API requires complicated setup for data bundle,
 which is often challenging to average users. Quantopian's proprietary data
 sources such as Morningstar is also not available to many. This library is
 to address this issue by using online API data sources and simplify the interface
 for live trading usage.
-The interface complies the original zipline/pipeline for the most part.  For more
-details about the Pipeline API, please see
-[Quantopian's tutorial](https://www.quantopian.com/tutorials/pipeline) and
-[zipline document](https://www.zipline.io/).
-
-If you are looking to use this library for your Quantopian algorithm,
-check out the [migration document](./migration.md).
+The interface complies the original zipline/pipeline for the most part.
 
 ## Data Sources
 This library predominantly relies on the [Alpaca Data API](https://docs.alpaca.markets/api-documentation/api-v2/market-data/) for daily
@@ -44,13 +32,13 @@ make
 sudo make install
 ```
 
-`pipeline-live` is a PyPI module and you can install it using `pip` command.
+`pipeline-research` is a PyPI module and you can install it using `pip` command.
 
 ```sh
-$ pip install pipeline-live
+$ pip install pipeline-research
 ```
 
-This module is tested and expected to work with python 3.6 and later
+This module is tested and expected to work with python 3.10 and later
 
 ## Example
 Here is a simple pipeline example.
@@ -68,10 +56,10 @@ os.environ["APCA_API_BASE_URL"] = "https://paper-api.alpaca.markets"
 (or do it with bash if you prefer)
 
 ```py
-from pipeline_live.engine import LivePipelineEngine
-from pipeline_live.data.sources.alpaca import list_symbols
-from pipeline_live.data.alpaca.pricing import USEquityPricing
-from pipeline_live.data.alpaca.factors import AverageDollarVolume
+from pipeline_research.engine import LivePipelineEngine
+from pipeline_research.data.sources.alpaca import list_symbols
+from pipeline_research.data.alpaca.pricing import USEquityPricing
+from pipeline_research.data.alpaca.factors import AverageDollarVolume
 from zipline.pipeline import Pipeline
 
 eng = LivePipelineEngine(list_symbols)
@@ -99,7 +87,7 @@ data is located in `$ZIPLINE_ROOT/data/daily_cache`.
 
 ## Pipeline API
 
-### pipeline_live.engine.LivePipelineEngine
+### pipeline_research.engine.LivePipelineEngine
 This class provides the similar interface to `zipline.pipeline.engine.SimplePipelineEngine`.
 The main difference is its `run_pipeline` does not require the start and end dates as parameters,
 and returns a DataFrame with the data for the current date (US/Eastern time).
@@ -119,7 +107,7 @@ APCA_API_KEY_ID
 APCA_API_SECRET_KEY
 ```
 
-### pipeline_live.data.alpaca.pricing.USEquityPricing
+### pipeline_research.data.alpaca.pricing.USEquityPricing
 This class provides the basic price information retrieved from
 [Alpaca Data API](https://docs.alpaca.markets/api-documentation/api-v2/market-data/bars/).
 
@@ -137,27 +125,27 @@ be sure that you are not using IEX-sourced factors too frequently
 or on too many securities. For more information about how many messages
 each method will cost, please refer to [this part](https://iexcloud.io/docs/api/#data-weighting) of the IEX Cloud documentation.
 
-### pipeline_live.data.iex.pricing.USEquityPricing
+### pipeline_research.data.iex.pricing.USEquityPricing
 This class provides the basic price information retrieved from
 [IEX Chart API](https://iextrading.com/developer/docs/#chart).
 
-### pipeline_live.data.iex.fundamentals.IEXCompany
+### pipeline_research.data.iex.fundamentals.IEXCompany
 This provides the DataSet interface using
 [IEX Company API](https://iextrading.com/developer/docs/#company).
 
-### pipeline_live.data.iex.fundamentals.IEXKeyStats
+### pipeline_research.data.iex.fundamentals.IEXKeyStats
 This provides the DataSet interface using
 [IEX Key Stats API](https://iextrading.com/developer/docs/#key-stats).
 
-### pipeline_live.data.iex.factors
+### pipeline_research.data.iex.factors
 It is important to note that the original builtin factors from zipline does
 not work here as is, since some of them rely on zipline's USEquityPricing class.
 This package provides the same set of zipline's builtin factor classes using
-`pipeline_live.data.iex.pricing.USEquityPricing` class. For the complete
+`pipeline_research.data.iex.pricing.USEquityPricing` class. For the complete
 list of builtin factors, please refer [zipline document](https://www.zipline.io/appendix.html#built-in-factors)
 
-### pipeline_live.data.iex.classifiers.Sector()
+### pipeline_research.data.iex.classifiers.Sector()
 A shortcut for `IEXCompany.sector.latest`
 
-### pipeline_live.data.iex.classifiers.Industry()
+### pipeline_research.data.iex.classifiers.Industry()
 A shortcut for `IEXCompany.industry.latest`
