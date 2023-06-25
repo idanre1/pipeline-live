@@ -117,8 +117,8 @@ class ResearchPipelineEngine(PipelineEngine):
         --------
         :meth:`zipline_pipeline.pipeline.engine.PipelineEngine.run_pipeline`
         """
-        from zipline_pipeline.utils.date_utils import compute_date_range_chunks
-        from zipline_pipeline.utils.pandas_utils import categorical_df_concat
+        from zipline.utils.date_utils import compute_date_range_chunks
+        from zipline.utils.pandas_utils import categorical_df_concat
         from functools import partial
         domain = self.resolve_domain(pipeline)
         ranges = compute_date_range_chunks(
