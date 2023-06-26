@@ -7,7 +7,6 @@ changes the most recent date's sector will be used.
 Created by Peter Harrington (pbharrin) on 10/25/17.
 """
 from zipline.pipeline.factors import CustomFactor
-import algo_data_provider as dp
 import pandas as pd
 import numpy as np
 import os
@@ -18,6 +17,7 @@ class Sector(CustomFactor):
     window_length = 1
 
     def __init__(self, *args, **kwargs):
+        import algo_data_provider as dp
         df = pd.read_parquet(dp.get_nasdaq_sector_data_filename())
         self.data = df['Sector']
         sector_mapping_dict = {'Basic Materials': 0, 'Consumer Discretionary': 1, 'Consumer Staples': 2, 'Energy': 3, 'Finance': 4, 'Health Care': 5, 'Industrials': 6, 'Miscellaneous': 7, 'Real Estate': 8, 'Technology': 9, 'Telecommunications': 10, 'Utilities': 11}
@@ -28,6 +28,7 @@ class Sector(CustomFactor):
 
 if __name__ == '__main__':
     # Single time ingesting of mapping data after downloading a new csv file
+    import algo_data_provider as dp
     df = pd.read_parquet(dp.get_nasdaq_sector_data_filename())
     # get unique values
     arr = np.unique(df['Sector'].dropna().values)
