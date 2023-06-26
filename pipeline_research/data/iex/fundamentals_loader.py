@@ -20,13 +20,13 @@ class IEXEventLoader(implements(PipelineLoader)):
         return out
 
 
-    def load_adjusted_array(self, domain, columns, dates, symbols, mask):
+    def load_adjusted_array(self, domain, columns, dates, sids, mask):
         symbol_dict = self._load()
         out = {}
         for c in columns:
             data = np.array([
                 self._safe_flat_getter(symbol, symbol_dict, c)
-                for symbol in symbols
+                for symbol in sids
             ], dtype=c.dtype)
             if c.dtype == object_dtype:
                 data[data == None] = c.missing_value  # noqa
@@ -36,13 +36,13 @@ class IEXEventLoader(implements(PipelineLoader)):
 
 class IEXBaseLoader(implements(PipelineLoader)):
 
-    def load_adjusted_array(self, domain, columns, dates, symbols, mask):
+    def load_adjusted_array(self, domain, columns, dates, sids, mask):
         symbol_dict = self._load()
         out = {}
         for c in columns:
             data = np.array([
                 symbol_dict.get(symbol, {}).get(c.name, c.missing_value)
-                for symbol in symbols
+                for symbol in sids
             ], dtype=c.dtype)
             if c.dtype == object_dtype:
                 data[data == None] = c.missing_value  # noqa

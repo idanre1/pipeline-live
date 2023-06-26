@@ -23,7 +23,7 @@ class USEquityPricingLoader(PipelineLoader):
 
         self._all_sessions = cal.all_sessions
 
-    def load_adjusted_array(self, domain, columns, dates, symbols, mask):
+    def load_adjusted_array(self, domain, columns, dates, sids, mask):
         # load_adjusted_array is called with dates on which the user's algo
         # will be shown data, which means we need to return the data that would
         # be known at the start of each date.  We assume that the latest data
@@ -42,7 +42,7 @@ class USEquityPricingLoader(PipelineLoader):
         prices = alpaca.get_stockprices(chart_range)
 
         dfs = []
-        for symbol in symbols:
+        for symbol in sids:
             if symbol not in prices:
                 df = pd.DataFrame(
                     {c.name: c.missing_value for c in columns},
