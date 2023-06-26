@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "setuptools-scm", 'pytest-runner', 'flake8','pytest','pytest-cov']
+requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -25,6 +25,9 @@ dependencies = [
         'zipline-reloaded==2.4',
 ]
 
+[project.optional-dependencies]
+dev = ['pytest-runner', 'flake8', 'pytest', 'pytest-cov']
+
 [tool.flake8]
 exclude = [
     '.git',
@@ -33,6 +36,3 @@ exclude = [
     'talib',
     '.eggs',
 ]
-
-#[aliases]
-#test=pytest
