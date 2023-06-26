@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm", 'pytest-runner', 'flake8','pytest','pytest-cov']
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pipeline-research"
+version = '0.1.0'
+authors = [
+    {name = "Idan Regev", email = ""},
+]
+description = "Zipline Pipeline extension for research notebooks"
+keywords = ['financial,zipline,pipeline,stock,screening,api,trade']
+license = {text = "BSD-3-Clause"}
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+        'pandas',
+        'numpy',
+        'scipy',
+        'pyarrow',
+        'alpaca-trade-api',
+        'iexfinance',
+        'zipline-reloaded==2.4',
+]
+
+[tool.flake8]
+exclude = [
+    '.git',
+    # This contains builds of flake8 that we don't want to check
+    'dist',
+    'talib',
+    '.eggs',
+]
+
+[aliases]
+test=pytest
