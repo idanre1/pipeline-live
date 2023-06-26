@@ -23,6 +23,7 @@ dependencies = [
         'alpaca-trade-api',
         'iexfinance',
         'zipline-reloaded==2.4',
+        'logbook',
 ]
 
 [project.optional-dependencies]
