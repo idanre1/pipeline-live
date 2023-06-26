@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "pipeline-research"
 version = '0.1.0'
 authors = [
-    {name = "Idan Regev", email = ""},
+    {name = "Idan Regev", email = "a@b.com"},
 ]
 description = "Zipline Pipeline extension for research notebooks"
 keywords = ['financial,zipline,pipeline,stock,screening,api,trade']
