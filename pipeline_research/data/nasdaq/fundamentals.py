@@ -7,10 +7,11 @@ from zipline.utils.numpy_utils import (
     object_dtype, datetime64ns_dtype, datetime64D_dtype, float64_dtype, int64_dtype
 )
 
-import algo_data_provider as dp
 class Company(DataSet):
     
-    df_path = dp.get_nasdaq_sector_data_filename()
+    def get_df_path():
+        import algo_data_provider as dp
+        return dp.get_nasdaq_sector_data_filename()
 
     symbol = Column(object_dtype, missing_value='', metadata={'df_name':'Symbol'})
     name = Column(object_dtype, missing_value='', metadata={'df_name':'Name'})
@@ -24,7 +25,7 @@ class Company(DataSet):
     sector = Column(object_dtype, missing_value='', metadata={'df_name':'Sector'})
     industry = Column(object_dtype, missing_value='', metadata={'df_name':'Industry'})
 
-    _loader = FundamentalLoader(df_path, 'Nasdaq Company Stats')
+    _loader = FundamentalLoader(get_df_path(), 'Nasdaq Company Stats')
 
     @classmethod
     def get_loader(cls):

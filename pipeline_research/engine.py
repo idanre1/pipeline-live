@@ -4,8 +4,7 @@ from pandas import DataFrame, MultiIndex
 from six import (
     iteritems,
 )
-from toolz import groupby, juxt
-from toolz.curried.operator import getitem
+from toolz import groupby
 
 from zipline.lib.adjusted_array import ensure_adjusted_array, ensure_ndarray
 from zipline.errors import NoFurtherDataError
@@ -436,12 +435,33 @@ class ResearchPipelineEngine(PipelineEngine):
         workspace = workspace.copy()
         domain = graph.domain
 
-        # If loadable terms share the same loader and extra_rows, load them all
-        # together. TODO breakpoint
-        loader_group_key = juxt(
-            lambda x: x.dataset.get_loader(), getitem(
-                graph.extra_rows))
-        loader_groups = groupby(loader_group_key, graph.loadable_terms)
+        # Many loaders can fetch data more efficiently if we ask them to
+        # retrieve all their inputs at once. For example, a loader backed by a
+        # SQL database can fetch multiple columns from the database in a single
+        # query.
+        #
+        # To enable these loaders to fetch their data efficiently, we group
+        # together requests for LoadableTerms if they are provided by the same
+        # loader and they require the same number of extra rows.
+        #
+        # The extra rows condition is a simplification: we don't currently have
+        # a mechanism for asking a loader to fetch different windows of data
+        # for different terms, so we only batch requests together when they're
+        # going to produce data for the same set of dates.
+        def loader_group_key(term):
+            loader = term.dataset.get_loader()
+            extra_rows = graph.extra_rows[term]
+            return loader, extra_rows
+
+        # Only produce loader groups for the terms we expect to load.  This
+        # ensures that we can run pipelines for graphs where we don't have a
+        # loader registered for an atomic term if all the dependencies of that
+        # term were supplied in the initial workspace.
+        will_be_loaded = graph.loadable_terms - workspace.keys()
+        loader_groups = groupby(
+            loader_group_key,
+            (t for t in execution_order if t in will_be_loaded),
+        )
 
         for term in execution_order:
             # `term` may have been supplied in `initial_workspace`, or we may

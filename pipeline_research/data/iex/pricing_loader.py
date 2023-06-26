@@ -4,8 +4,9 @@ import pandas as pd
 
 from zipline.lib.adjusted_array import AdjustedArray
 from zipline.pipeline.loaders.base import PipelineLoader
-from zipline.utils.calendars import get_calendar
+from zipline.utils.calendar_utils import get_calendar
 from zipline.errors import NoFurtherDataError
+from interface import implements
 
 from pipeline_research.data.sources import iex
 
@@ -13,7 +14,7 @@ from pipeline_research.data.sources import iex
 log = logbook.Logger(__name__)
 
 
-class USEquityPricingLoader(PipelineLoader):
+class USEquityPricingLoader(implements(PipelineLoader)):
     """
     PipelineLoader for US Equity Pricing data
     """

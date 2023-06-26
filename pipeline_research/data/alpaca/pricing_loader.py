@@ -4,7 +4,7 @@ import pandas as pd
 
 from zipline.lib.adjusted_array import AdjustedArray
 from zipline.pipeline.loaders.base import PipelineLoader
-from zipline.utils.calendars import get_calendar
+from zipline.utils.calendar_utils import get_calendar
 from zipline.errors import NoFurtherDataError
 
 from pipeline_research.data.sources import alpaca
