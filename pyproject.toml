@@ -34,5 +34,5 @@ exclude = [
     '.eggs',
 ]
 
-[aliases]
-test=pytest
+#[aliases]
+#test=pytest
