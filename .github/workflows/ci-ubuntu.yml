@@ -26,8 +26,9 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install pipenv
-        pipenv install -d
+        python -c "import configparser; c = configparser.ConfigParser(); c.read('setup.cfg'); print(c['options']['install_requires'])" | xargs python -m pip install
+        python -c "import configparser; c = configparser.ConfigParser(); c.read('setup.cfg'); print(c['options']['tests_require'])" | xargs python -m pip install
+        python -c "import configparser; c = configparser.ConfigParser(); c.read('setup.cfg'); print(c['options']['setup_requires'])" | xargs python -m pip install
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names

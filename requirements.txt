@@ -1,2 +1,4 @@
 zipline-reloaded
 pyarrow
+zipline-reloaded==2.4
+numpy

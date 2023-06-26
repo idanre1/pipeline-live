@@ -28,6 +28,7 @@ setup(
         'pandas',
         'numpy',
         'scipy',
+        'pyarrow',
         'alpaca-trade-api',
         'iexfinance',
         'zipline-reloaded==2.4',
