@@ -597,7 +597,9 @@ class ResearchPipelineEngine(PipelineEngine):
         resolved_assets = symbols.to_numpy()
         index = _pipeline_output_index(dates, resolved_assets, mask)
 
-        return DataFrame(data=final_columns, index=index)
+        final_df = DataFrame(data=final_columns, index=index)
+        final_df.index.names = ['datetime','symbol']
+        return final_df
     
     def _validate_compute_chunk_params(self,
                                        graph,
