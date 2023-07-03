@@ -69,9 +69,10 @@ class FundamentalLoader(implements(PipelineLoader)):
             out[c] = np.tile(data, (len(dates), 1))
         return out
 
-class USEquityPricingLoader(implements(PipelineLoader)):
+class USEquityPricingLoaderShifted(implements(PipelineLoader)):
     """
     PipelineLoader for US Equity Pricing data from custom get_pandas_df function
+    Data is shifted by 1 day to mimic Quantopian behavior
     """
 
     def __init__(self, get_pandas_df, loader_desc):
@@ -87,25 +88,24 @@ class USEquityPricingLoader(implements(PipelineLoader)):
         self.get_pandas_df = get_pandas_df
         self.loader_desc   = loader_desc
 
-        domain = US_EQUITIES
-
-        self._all_sessions = domain.all_sessions()
-
     def load_adjusted_array(self, domain, columns, dates, sids, mask):
         # load_adjusted_array is called with dates on which the user's algo
         # will be shown data, which means we need to return the data that would
         # be known at the start of each date.  We assume that the latest data
         # known on day N is the data from day (N - 1), so we shift all query
         # dates back by a day.
+        sessions = domain.all_sessions()
+        
         start_date, end_date = _shift_dates(
-            self._all_sessions, dates[0], dates[-1], shift=1,
+            sessions, dates[0], dates[-1], shift=1,
         )
 
         # Domain trading days
-        sessions = self._all_sessions
         sessions_shifted = sessions[(sessions >= start_date) & (sessions <= end_date)]
         sessions_non_shifted = sessions[(sessions >= dates[0]) & (sessions <= dates[-1])]
+        return self.load_adjusted_array_shifted(columns, sessions_shifted, sessions_non_shifted, sids, mask, reindex_method='ffill')
 
+    def load_adjusted_array_shifted(self, columns, sessions_shifted, sessions_non_shifted, sids, mask, reindex_method='ffill'):
         # fetch prices
         log.info(f'Loading {self.loader_desc}')
         print(f'Loading {self.loader_desc}')
@@ -129,7 +129,8 @@ class USEquityPricingLoader(implements(PipelineLoader)):
 
                 df.columns = df.columns.get_level_values(0)
 
-                df = df.reindex(sessions_non_shifted, method='ffill')
+                # backward reindex of dates
+                df = df.reindex(sessions_non_shifted, method=reindex_method)
             dfs.append(df)
 
         raw_arrays = {}
@@ -159,8 +160,31 @@ class USEquityPricingLoader(implements(PipelineLoader)):
             )
         return out
 
+class USEquityPricingLoader(USEquityPricingLoaderShifted):
+    """
+    PipelineLoader for US Equity Pricing data from custom get_pandas_df function
+    Data is NOT shifted to get exact prices as the required day.
+    WARNING: Beware of lookahead bias. You should treat this data as it appeared on the time the market is closed
+    """
+    def load_adjusted_array(self, domain, columns, dates, sids, mask):
+        # Don't mimic shifted dates
+        sessions = domain.all_sessions()
+        
+        # start_date, end_date = _shift_dates(
+        #     self._all_sessions, dates[0], dates[-1], shift=1,
+        # )
+
+        # Domain trading days
+        # sessions_shifted = sessions[(sessions >= start_date) & (sessions <= end_date)]
+        sessions_shifted     = sessions[(sessions >= dates[0]) & (sessions <= dates[-1])]
+        sessions_non_shifted = sessions[(sessions >= dates[0]) & (sessions <= dates[-1])]
+        return self.load_adjusted_array_shifted(columns, sessions_shifted, sessions_non_shifted, sids, mask, reindex_method='bfill')
+
 
 def _shift_dates(dates, start_date, end_date, shift):
+    '''
+    Shift dates by trading calendar
+    '''
     try:
         start = dates.get_loc(start_date)
     except KeyError:
