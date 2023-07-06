@@ -121,7 +121,7 @@ class ResearchPipelineEngine(PipelineEngine):
         from functools import partial
         domain = self.resolve_domain(pipeline)
         ranges = compute_date_range_chunks(
-            domain.all_sessions(),
+            domain.sessions().tz_localize('UTC'),
             start_date,
             end_date,
             chunksize,
@@ -268,7 +268,7 @@ class ResearchPipelineEngine(PipelineEngine):
             that existed for at least one day between `start_date` and
             `end_date`.
         """
-        sessions = domain.all_sessions()
+        sessions = domain.sessions().tz_localize('UTC')
 
         # Allow for user to start/end from non-trading days, auto then shrink.
         # if start_date not in sessions:

@@ -94,7 +94,7 @@ class USEquityPricingLoaderShifted(implements(PipelineLoader)):
         # be known at the start of each date.  We assume that the latest data
         # known on day N is the data from day (N - 1), so we shift all query
         # dates back by a day.
-        sessions = domain.all_sessions()
+        sessions = domain.sessions().tz_localize('UTC')
         
         start_date, end_date = _shift_dates(
             sessions, dates[0], dates[-1], shift=1,
@@ -168,7 +168,7 @@ class USEquityPricingLoader(USEquityPricingLoaderShifted):
     """
     def load_adjusted_array(self, domain, columns, dates, sids, mask):
         # Don't mimic shifted dates
-        sessions = domain.all_sessions()
+        sessions = domain.sessions().tz_localize('UTC')
         
         # start_date, end_date = _shift_dates(
         #     self._all_sessions, dates[0], dates[-1], shift=1,

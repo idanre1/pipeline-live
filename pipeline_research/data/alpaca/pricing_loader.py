@@ -23,7 +23,7 @@ class USEquityPricingLoader(implements(PipelineLoader)):
     def __init__(self):
         domain = US_EQUITIES
 
-        self._all_sessions = domain.all_sessions()
+        self._all_sessions = domain.sessions().tz_localize('UTC')
 
     def load_adjusted_array(self, domain, columns, dates, sids, mask):
         # load_adjusted_array is called with dates on which the user's algo
