@@ -1,9 +1,5 @@
 from numpy import array, arange
 import pandas as pd
-from pandas import DataFrame, MultiIndex
-from six import (
-    iteritems,
-)
 from toolz import groupby
 
 from zipline.lib.adjusted_array import ensure_adjusted_array, ensure_ndarray
@@ -49,15 +45,15 @@ class ResearchPipelineEngine(PipelineEngine):
     """
 
     def __init__(self,
-                 list_symbols,
+                 asset_finder,
                  default_domain=US_EQUITIES,
                  populate_initial_workspace=None,
                  default_hooks=None,
                  ):
-        # Instead of get_loader, asset_finder we implement list_symbols
+        # Instead of get_loader we load our data from Factors and DataSets.
+        # See pipeline_research.data.yahoo.pricing get_pandas_df for example.
         # self._get_loader = get_loader
-        # self._finder = asset_finder
-        self._list_symbols = list_symbols
+        self._finder = asset_finder
 
         self._root_mask_term = AssetExists()
         self._root_mask_dates_term = InputDates()
@@ -181,8 +177,7 @@ class ResearchPipelineEngine(PipelineEngine):
             )
 
     def _run_pipeline_impl(self, pipeline, start_date, end_date, hooks):
-        """Shared core for ``run_pipeline`` and ``run_chunked_pipeline``.
-        """
+        """Shared core for ``run_pipeline`` and ``run_chunked_pipeline``."""
         # See notes at the top of this module for a description of the
         # algorithm implemented here.
         start_date = pd.Timestamp(start_date, tz='UTC')
@@ -190,26 +185,30 @@ class ResearchPipelineEngine(PipelineEngine):
         if end_date < start_date:
             raise ValueError(
                 "start_date must be before or equal to end_date \n"
-                "start_date=%s, end_date=%s" % (start_date, end_date)
+                f"start_date={start_date}, end_date={end_date}"
             )
 
         domain = self.resolve_domain(pipeline)
 
-        graph = pipeline.to_execution_plan(domain,
-                                           self._root_mask_term,
-                                           start_date,
-                                           end_date,
-                                           )
+        graph = pipeline.to_execution_plan(
+            domain,
+            self._root_mask_term,
+            start_date,
+            end_date,
+        )
         extra_rows = graph.extra_rows[self._root_mask_term]
         root_mask = self._compute_root_mask(
-            domain, start_date, end_date, extra_rows,
+            domain,
+            start_date,
+            end_date,
+            extra_rows,
         )
         dates, symbols, root_mask_values = explode(root_mask)
 
         workspace = self._populate_initial_workspace(
             {
                 self._root_mask_term: root_mask_values,
-                self._root_mask_dates_term: as_column(dates.values)
+                self._root_mask_dates_term: as_column(dates.values),
             },
             self._root_mask_term,
             graph,
@@ -297,21 +296,14 @@ class ResearchPipelineEngine(PipelineEngine):
         #
         # Build lifetimes matrix reaching back to `extra_rows` days before
         # `start_date.`
-        # finder = self._finder
-        # lifetimes = finder.lifetimes(
-        #     sessions[start_idx - extra_rows:end_idx],
-        #     include_start_date=False,
-        #     country_codes=(domain.domain_code,),
-        # )
-        symbols = self._list_symbols()
-        symbols = [s for s in symbols if isinstance(s, str)]
-        dates = sessions[start_idx - extra_rows:end_idx]
-        symbols = sorted(symbols)
-        lifetimes = pd.DataFrame(True, index=dates, columns=symbols)
-
+        finder = self._finder
+        lifetimes = finder.lifetimes(
+            sessions[start_idx - extra_rows : end_idx],
+            include_start_date=False,
+            country_codes=(domain.country_code,),
+        )
         assert lifetimes.index[extra_rows] >= start_date
         assert lifetimes.index[-1] <= end_date
-
 
         if not lifetimes.columns.unique:
             columns = lifetimes.columns
@@ -322,17 +314,19 @@ class ResearchPipelineEngine(PipelineEngine):
         # window through the end of the requested dates.
         existed = lifetimes.any()
         ret = lifetimes.loc[:, existed]
-        # num_assets = ret.shape[1]
+        num_assets = ret.shape[1]
 
-        # if num_assets == 0:
-        #     raise ValueError(
-        #         "Failed to find any assets with domain {!r} that traded "
-        #         "between {} and {}.\n"
-        #         "This probably means that your asset db is old or that it has "
-        #         "incorrect country/exchange metadata.".format(
-        #             domain.domain_code, start_date, end_date,
-        #         )
-        #     )
+        if num_assets == 0:
+            raise ValueError(
+                "Failed to find any assets with country_code {!r} that traded "
+                "between {} and {}.\n"
+                "This probably means that your asset db is old or that it has "
+                "incorrect country/exchange metadata.".format(
+                    domain.country_code,
+                    start_date,
+                    end_date,
+                )
+            )
         shape = ret.shape
         assert shape[0] * shape[1] != 0, 'root mask cannot be empty'
 
@@ -360,7 +354,8 @@ class ResearchPipelineEngine(PipelineEngine):
             # AdjustedArray.
             for input_ in specialized:
                 adjusted_array = ensure_adjusted_array(
-                    workspace[input_], input_.missing_value,
+                    workspace[input_],
+                    input_.missing_value,
                 )
                 out.append(
                     adjusted_array.traverse(
@@ -449,6 +444,21 @@ class ResearchPipelineEngine(PipelineEngine):
         # for different terms, so we only batch requests together when they're
         # going to produce data for the same set of dates.
         def loader_group_key(term):
+            '''
+            Most Pipeline API users only interact with :class:`Term` via subclasses:
+
+            - :class:`~zipline.pipeline.data.BoundColumn`
+            - :class:`~zipline.pipeline.Factor`
+            - :class:`~zipline.pipeline.Filter`
+            - :class:`~zipline.pipeline.Classifier`
+
+            For example:
+            - : USEquityPricing.close is a term.
+            - : Its dataset is USEquityPricing
+            - : pipeline_research.data.yahoo.pricing.USEquityPricing has a get_loader classfunction
+            '''
+
+            # loader = get_loader(term)
             loader = term.dataset.get_loader()
             extra_rows = graph.extra_rows[term]
             return loader, extra_rows
@@ -491,12 +501,17 @@ class ResearchPipelineEngine(PipelineEngine):
                 self._ensure_can_load(loader, to_load)
                 with hooks.loading_terms(to_load):
                     loaded = loader.load_adjusted_array(
-                        domain, to_load, mask_dates, symbols, mask,
-                )
+                        domain,
+                        to_load,
+                        mask_dates,
+                        symbols,
+                        mask,
+                    )
                 assert set(loaded) == set(to_load), (
-                    'loader did not return an AdjustedArray for each column\n'
-                    'expected: %r\n'
-                    'got:      %r' % (
+                    "loader did not return an AdjustedArray for each column\n"
+                    "expected: %r\n"
+                    "got:      %r"
+                    % (
                         sorted(to_load, key=repr),
                         sorted(loaded, key=repr),
                     )
@@ -516,7 +531,6 @@ class ResearchPipelineEngine(PipelineEngine):
                         symbols,
                         mask,
                     )
-                
                 if term.ndim == 2:
                     assert workspace[term].shape == mask.shape
                 else:
@@ -530,9 +544,9 @@ class ResearchPipelineEngine(PipelineEngine):
         # At this point, all the output terms are in the workspace.
         out = {}
         graph_extra_rows = graph.extra_rows
-        for name, term in iteritems(graph.outputs):
+        for name, term in graph.outputs.items():
             # Truncate off extra rows from outputs.
-            out[name] = workspace[term][graph_extra_rows[term]:]
+            out[name] = workspace[term][graph_extra_rows[term] :]
         return out
 
     def _to_narrow(self, terms, data, mask, dates, symbols):
@@ -575,12 +589,12 @@ class ResearchPipelineEngine(PipelineEngine):
             # Slicing `dates` here to preserve pandas metadata.
             empty_dates = dates[:0]
             empty_assets = array([], dtype=object)
-            return DataFrame(
+            return pd.DataFrame(
                 data={
                     name: array([], dtype=arr.dtype)
-                    for name, arr in iteritems(data)
+                    for name, arr in data.items()
                 },
-                index=MultiIndex.from_arrays([empty_dates, empty_assets]),
+                index=pd.MultiIndex.from_arrays([empty_dates, empty_assets]),
             )
 
 
@@ -589,15 +603,15 @@ class ResearchPipelineEngine(PipelineEngine):
             # Each term that computed an output has its postprocess method
             # called on the filtered result.
             #
-            # As of Mon May 2 15:38:47 2016, we only use this to convert
-            # LabelArrays into categoricals.
+            # Using this to convert np.records to tuples
             final_columns[name] = terms[name].postprocess(data[name][mask])
 
         # resolved_assets = array(self._finder.retrieve_all(symbols))
         resolved_assets = symbols.to_numpy()
         index = _pipeline_output_index(dates, resolved_assets, mask)
 
-        final_df = DataFrame(data=final_columns, index=index)
+        final_df = pd.DataFrame(data=final_columns, index=index, columns=final_columns.keys()
+        )
         final_df.index.names = ['datetime','symbol']
         return final_df
     
@@ -634,8 +648,7 @@ class ResearchPipelineEngine(PipelineEngine):
                 )
             )
     def resolve_domain(self, pipeline):
-        """Resolve a concrete domain for ``pipeline``.
-        """
+        """Resolve a concrete domain for ``pipeline``."""
         domain = pipeline.domain(default=self._default_domain)
         if domain is GENERIC:
             raise ValueError(
@@ -646,10 +659,7 @@ class ResearchPipelineEngine(PipelineEngine):
         return domain
 
     def _is_special_root_term(self, term):
-        return (
-            term is self._root_mask_term
-            or term is self._root_mask_dates_term
-        )
+        return term is self._root_mask_term or term is self._root_mask_dates_term
 
     def _resolve_hooks(self, hooks):
         if hooks is None:
@@ -657,8 +667,7 @@ class ResearchPipelineEngine(PipelineEngine):
         return DelegatingHooks(self._default_hooks + hooks)
 
     def _ensure_can_load(self, loader, terms):
-        """Ensure that ``loader`` can load ``terms``.
-        """
+        """Ensure that ``loader`` can load ``terms``."""
         if not loader.currency_aware:
             bad = [t for t in terms if t.currency_conversion is not None]
             if bad:
@@ -690,7 +699,7 @@ def _pipeline_output_index(dates, assets, mask):
     """
     date_labels = repeat_last_axis(arange(len(dates)), len(assets))[mask]
     asset_labels = repeat_first_axis(arange(len(assets)), len(dates))[mask]
-    return MultiIndex(
+    return pd.MultiIndex(
         levels=[dates, assets],
         #labels=[date_labels, asset_labels],
         codes=[date_labels, asset_labels],

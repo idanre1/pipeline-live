@@ -14,7 +14,7 @@ class DfFactor(CustomFactor):
     def __init__(self, *args, **kwargs):
         df = pd.read_parquet('/datadrive/scratch/factor_df.parquet')
         # Frequency is weekly, but daily is required
-        self.data = df.resample('D').ffill()
+        self.data = df.resample('D').ffill().tz_localize('UTC')
 
     def compute(self, today, assets, out):
         out[:] = self.data.loc[today,assets].values
