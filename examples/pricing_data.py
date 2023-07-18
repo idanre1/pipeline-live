@@ -1,13 +1,19 @@
 from zipline.pipeline import Pipeline
 from pipeline_research.engine import ResearchPipelineEngine
-from pipeline_research.assets.static import StaticAssetFinder
+from pipeline_research.assets.assets import AssetFinder
 
 from pipeline_research.data.yahoo.pricing import USEquityPricing
 
-# universe is only the symbols in the list below
-def list_symbols():
-    return ['MSFT', 'AAPL']
-assetFinder = StaticAssetFinder(list_symbols)
+import pandas as pd
+
+# universe is of a constituents of a virtual etf.
+constituents = pd.DataFrame(columns=['MSFT', 'AAPL'])
+constituents.loc[pd.Timestamp('2023-06-01')] = dict(MSFT=False, AAPL=True)  # Trading day
+constituents.loc[pd.Timestamp('2023-06-02')] = dict(MSFT=True,  AAPL=False) # Trading day
+constituents.loc[pd.Timestamp('2023-06-03')] = dict(MSFT=True,  AAPL=False) # NON-Trading day
+constituents.loc[pd.Timestamp('2023-06-04')] = dict(MSFT=False, AAPL=True)  # NON-Trading day
+constituents.loc[pd.Timestamp('2023-06-05')] = dict(MSFT=True,  AAPL=True)  # Trading day
+assetFinder = AssetFinder(constituents)
 
 eng = ResearchPipelineEngine(assetFinder)
 pipe = Pipeline({
