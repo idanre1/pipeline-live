@@ -18,7 +18,7 @@ def get_pandas_df(sids, start, end):
         'Open':'open',
         'Volume':'volume',
         }, inplace=True)
-    return prices.unstack()
+    return prices.unstack().tz_localize('UTC')
 
 class USEquityPricing(DataSet):
     """

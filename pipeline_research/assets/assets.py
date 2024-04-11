@@ -64,5 +64,14 @@ class AssetFinder:
 		numpy.putmask
 		pipeline_research.engine.SimplePipelineEngine._compute_root_mask
 		"""
-
-		return self._constituents.loc[dates]
+		# _constituents can be sparse, do date manipulation should arise:
+  
+		# drop duplicates
+		constituents = self._constituents[~self._constituents.index.duplicated(keep='first')]
+		# get ffill indexes locations
+		ilocs = constituents.index.get_indexer(dates, method='ffill')
+		# slice the dataframe and rename indexes to requested dates
+		df = constituents.iloc[ilocs]
+		df.index = dates
+		
+		return df
